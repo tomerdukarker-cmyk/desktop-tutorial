@@ -1,5 +1,5 @@
-# Welcome to GitHub Desktop!
+# To-Do List Project
+זהו פרויקט רשימת משימות אישי שנבנה ב-HTML, CSS ו-JavaScript.
 
-This is your README. READMEs are where you can communicate what your project is and how to use it.
-
-Write your name on line 6, save it, and then head back to GitHub Desktop.
+אתה יכול לצפות באתר החי כאן:
+https://tomerdukarker-cmyk.github.io/desktop-tutorial/
