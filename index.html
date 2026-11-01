@@ -3,20 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
     <title>רשימת משימות חכמה</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>הפרויקט שלי: To-Do List</h1>
-        <div class="input-section">
-            <input type="text" id="taskInput" placeholder="הקלד משימה חדשה...">
-            <button id="addTaskBtn">הוסף משימה</button>
-        </div>
-        <ul id="taskList">
-            <!-- כאן יופיעו המשימות בהמשך -->
-        </ul>
-    </div>
+    <main class="app">
+        <header class="app-header">
+            <div>
+                <h1>המשימות שלי</h1>
+                <p id="today" class="subtitle"></p>
+            </div>
+            <div class="urgent-badge" id="urgentBadge" hidden>
+                <span id="urgentCount">0</span> דחופות
+            </div>
+        </header>
+
+        <section class="progress-section">
+            <div class="progress-labels">
+                <span id="progressText">אין משימות עדיין</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <progress id="progressBar" max="100" value="0"></progress>
+        </section>
+
+        <form id="taskForm" class="task-form" autocomplete="off">
+            <div class="input-row">
+                <input type="text" id="taskInput" placeholder="מה צריך לעשות?" aria-label="משימה חדשה" maxlength="200">
+                <button type="submit" id="addTaskBtn" class="add-btn">הוסף</button>
+            </div>
+            <div class="priority-picker" role="radiogroup" aria-label="עדיפות">
+                <span class="picker-label">עדיפות:</span>
+                <label class="chip chip-high">
+                    <input type="radio" name="priority" value="high">
+                    <span>🔥 גבוהה</span>
+                </label>
+                <label class="chip chip-medium">
+                    <input type="radio" name="priority" value="medium" checked>
+                    <span>בינונית</span>
+                </label>
+                <label class="chip chip-low">
+                    <input type="radio" name="priority" value="low">
+                    <span>נמוכה</span>
+                </label>
+            </div>
+            <div class="meta-row">
+                <label class="field">
+                    <span>קטגוריה</span>
+                    <select id="categoryInput"></select>
+                </label>
+                <label class="field">
+                    <span>תאריך</span>
+                    <input type="date" id="dateInput">
+                </label>
+                <label class="field">
+                    <span>שעה</span>
+                    <input type="time" id="timeInput">
+                </label>
+            </div>
+        </form>
+
+        <nav class="tabs" role="tablist" aria-label="תצוגה">
+            <button type="button" class="tab active" role="tab" data-view="list" aria-selected="true">📋 רשימה</button>
+            <button type="button" class="tab" role="tab" data-view="calendar" aria-selected="false">📅 לוח שנה</button>
+            <button type="button" class="tab" role="tab" data-view="stats" aria-selected="false">📊 פילוח</button>
+        </nav>
+
+        <!-- תצוגת רשימה -->
+        <section id="view-list" class="view">
+            <div class="list-toolbar">
+                <nav class="filters" aria-label="סינון משימות">
+                    <button type="button" class="filter-btn active" data-filter="all">הכל</button>
+                    <button type="button" class="filter-btn" data-filter="high">🔥 דחופות</button>
+                    <button type="button" class="filter-btn" data-filter="active">פעילות</button>
+                    <button type="button" class="filter-btn" data-filter="done">הושלמו</button>
+                </nav>
+                <select id="categoryFilter" class="category-filter" aria-label="סינון לפי קטגוריה"></select>
+            </div>
+            <ul id="taskList" class="task-list"></ul>
+            <p id="emptyState" class="empty-state" hidden></p>
+        </section>
+
+        <!-- תצוגת לוח שנה -->
+        <section id="view-calendar" class="view" hidden>
+            <div class="cal-header">
+                <button type="button" id="prevMonth" class="cal-nav" aria-label="החודש הקודם">→</button>
+                <h2 id="monthTitle" class="month-title"></h2>
+                <button type="button" id="nextMonth" class="cal-nav" aria-label="החודש הבא">←</button>
+                <button type="button" id="todayBtn" class="today-btn">היום</button>
+            </div>
+            <div class="cal-weekdays" aria-hidden="true">
+                <span>א׳</span><span>ב׳</span><span>ג׳</span><span>ד׳</span><span>ה׳</span><span>ו׳</span><span>ש׳</span>
+            </div>
+            <div id="calendarGrid" class="cal-grid"></div>
+            <div class="cal-legend">
+                <span><span class="legend-swatch vacation"></span>חופשה מבית הספר</span>
+                <span><span class="legend-swatch holiday"></span>חג או מועד</span>
+                <span><span class="dot priority-high"></span>משימות (לפי עדיפות)</span>
+            </div>
+            <h3 id="dayTitle" class="day-title"></h3>
+            <ul id="dayEvents" class="day-events"></ul>
+            <ul id="dayTaskList" class="task-list"></ul>
+            <p id="dayEmptyState" class="empty-state" hidden>אין משימות ביום הזה. התאריך כבר מולא בטופס למעלה, רק תכתוב משימה ✨</p>
+        </section>
+
+        <!-- תצוגת פילוח -->
+        <section id="view-stats" class="view" hidden>
+            <div class="stat-tiles">
+                <div class="stat-tile"><span id="statTotal" class="stat-value">0</span><span class="stat-label">סה״כ משימות</span></div>
+                <div class="stat-tile"><span id="statDone" class="stat-value">0</span><span class="stat-label">הושלמו</span></div>
+                <div class="stat-tile"><span id="statUrgent" class="stat-value">0</span><span class="stat-label">דחופות פתוחות</span></div>
+                <div class="stat-tile" id="overdueTile"><span id="statOverdue" class="stat-value">0</span><span class="stat-label">באיחור</span></div>
+            </div>
+
+            <h3 class="section-title">לפי קטגוריה</h3>
+            <p class="section-hint">לחיצה על שורה מציגה את המשימות שלה ברשימה</p>
+            <div id="categoryTable" class="table-wrap"></div>
+
+            <h3 class="section-title">משימות פתוחות: קטגוריה × עדיפות</h3>
+            <div id="matrixTable" class="table-wrap"></div>
+
+            <h3 class="section-title">תמונה שנתית לפי חודשים</h3>
+            <p class="section-hint">לחיצה על חודש פותחת אותו בלוח השנה</p>
+            <div id="monthTable" class="table-wrap"></div>
+            <p id="undatedNote" class="section-hint"></p>
+        </section>
+
+        <footer class="app-footer">
+            <span id="taskCounter"></span>
+            <button type="button" id="clearDoneBtn" class="clear-btn" hidden>נקה משימות שהושלמו</button>
+        </footer>
+    </main>
+    <script src="holidays.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
