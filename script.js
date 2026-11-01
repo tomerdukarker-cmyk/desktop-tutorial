@@ -1,3 +1,5 @@
+import * as cloud from './cloud.js?v=4';
+
 const taskForm = document.getElementById('taskForm');
 const taskInput = document.getElementById('taskInput');
 const categoryInput = document.getElementById('categoryInput');
@@ -25,8 +27,19 @@ const categoryTable = document.getElementById('categoryTable');
 const matrixTable = document.getElementById('matrixTable');
 const monthTable = document.getElementById('monthTable');
 const undatedNote = document.getElementById('undatedNote');
+const loadingState = document.getElementById('loadingState');
+const authScreen = document.getElementById('authScreen');
+const authMessage = document.getElementById('authMessage');
+const signInBtn = document.getElementById('signInBtn');
+const appContent = document.getElementById('appContent');
+const userBox = document.getElementById('userBox');
+const userName = document.getElementById('userName');
+const syncText = document.getElementById('syncText');
+const toast = document.getElementById('toast');
 
+// המשימות הישנות שנשמרו בדפדפן לפני המעבר לענן
 const STORAGE_KEY = 'tasks';
+const MIGRATED_KEY = 'tasksMigratedToCloud';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const PRIORITIES = {
@@ -105,35 +118,46 @@ function isOverdue(task) {
 
 // ---------- שמירה וטעינה ----------
 
-// טעינת משימות שמורות מהדפדפן (משימות ישנות מקבלות ערכי ברירת מחדל)
-function loadTasks() {
+// משימה תקינה עם ערכי ברירת מחדל לשדות חסרים
+function normalizeTask(task) {
+    return {
+        id: String(task.id || createId()),
+        text: String(task.text ?? '').slice(0, 200),
+        done: Boolean(task.done),
+        priority: PRIORITIES[task.priority] ? task.priority : 'medium',
+        category: CATEGORIES[task.category] ? task.category : 'other',
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) ? task.dueDate : '',
+        dueTime: /^\d{2}:\d{2}$/.test(task.dueTime) ? task.dueTime : '',
+        createdAt: Number(task.createdAt) || Date.now(),
+        updatedAt: Number(task.updatedAt) || Number(task.createdAt) || Date.now()
+    };
+}
+
+function loadLocalTasks() {
     try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-        return saved.map((task) => ({
-            id: task.id || createId(),
-            text: String(task.text),
-            done: Boolean(task.done),
-            priority: PRIORITIES[task.priority] ? task.priority : 'medium',
-            category: CATEGORIES[task.category] ? task.category : 'other',
-            dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) ? task.dueDate : '',
-            dueTime: /^\d{2}:\d{2}$/.test(task.dueTime) ? task.dueTime : '',
-            createdAt: task.createdAt || Date.now()
-        }));
+        return saved.filter((t) => t && t.text).map(normalizeTask);
     } catch {
         return [];
     }
 }
 
-// שמירת המשימות בדפדפן
-function saveTasks() {
+// העברה חד-פעמית של משימות שנשמרו בדפדפן הזה אל הלוח המשותף
+async function migrateLocalTasks() {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    } catch {
-        // אם השמירה נכשלה (למשל בגלישה בסתר) - האתר ממשיך לעבוד
+        if (localStorage.getItem(MIGRATED_KEY)) return;
+        const local = loadLocalTasks();
+        if (local.length) {
+            await cloud.uploadTasks(local);
+            showToast(`הועברו ${local.length} משימות מהדפדפן ללוח המשותף ☁️`);
+        }
+        localStorage.setItem(MIGRATED_KEY, new Date().toISOString());
+    } catch (error) {
+        console.error(error);
     }
 }
 
-let tasks = loadTasks();
+let tasks = [];
 
 // ---------- פעולות על משימות ----------
 
@@ -160,16 +184,30 @@ function filterTasks(list) {
     }
 }
 
+// שינויים נשלחים לענן. המסך מתעדכן מיד דרך המאזין ב-startCloud, אצל שני המשתמשים
+function reportWriteError(error) {
+    console.error(error);
+    showToast(error.code === 'permission-denied'
+        ? 'אין הרשאה לשמור. ייתכן שהחשבון לא מורשה ללוח הזה'
+        : 'השמירה נכשלה, נסה שוב');
+}
+
 function updateTask(id, changes) {
-    tasks = tasks.map((t) => (t.id === id ? { ...t, ...changes } : t));
-    saveTasks();
-    render();
+    cloud.updateTask(id, changes).catch(reportWriteError);
 }
 
 function deleteTask(id) {
-    tasks = tasks.filter((t) => t.id !== id);
-    saveTasks();
-    render();
+    cloud.deleteTask(id).catch(reportWriteError);
+}
+
+let toastTimer;
+function showToast(message) {
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.hidden = true;
+    }, 4000);
 }
 
 // ---------- תצוגת משימה ----------
@@ -206,6 +244,9 @@ function createTaskElement(task) {
     if (task.dueDate) {
         const overdue = isOverdue(task);
         meta.append(createTag(`${overdue ? '⚠️' : '📅'} ${formatDue(task)}`, overdue ? 'tag-overdue' : 'tag-date'));
+    }
+    if (task.pending) {
+        meta.append(createTag('⏳ עוד לא נשמר בענן', 'tag-pending'));
     }
     body.append(text, meta);
 
@@ -691,7 +732,8 @@ taskForm.addEventListener('submit', (e) => {
     // שעה בלי תאריך = היום
     const dueDate = dateInput.value || (dueTime ? toDateKey(new Date()) : '');
 
-    tasks.push({
+    const now = Date.now();
+    cloud.saveTask({
         id: createId(),
         text,
         done: false,
@@ -699,16 +741,16 @@ taskForm.addEventListener('submit', (e) => {
         category: categoryInput.value,
         dueDate,
         dueTime,
-        createdAt: Date.now()
-    });
-    saveTasks();
+        createdAt: now,
+        updatedAt: now
+    }).catch(reportWriteError);
 
     // בלוח השנה - מעבר לחודש וליום של המשימה החדשה
     if (currentView === 'calendar' && dueDate) {
         selectedDay = dueDate;
         calendarMonth = startOfMonth(fromDateKey(dueDate));
+        render();
     }
-    render();
 
     taskInput.value = '';
     timeInput.value = '';
@@ -734,9 +776,90 @@ categoryFilter.addEventListener('change', () => {
 });
 
 clearDoneBtn.addEventListener('click', () => {
-    tasks = tasks.filter((t) => !t.done);
-    saveTasks();
-    render();
+    const doneIds = tasks.filter((t) => t.done).map((t) => t.id);
+    cloud.deleteTasks(doneIds).catch(reportWriteError);
+});
+
+document.getElementById('signOutBtn').addEventListener('click', () => {
+    cloud.signOut();
+});
+
+signInBtn.addEventListener('click', async () => {
+    authMessage.textContent = '';
+    try {
+        await cloud.signIn();
+    } catch (error) {
+        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') return;
+        console.error(error);
+        authMessage.textContent = error.code === 'auth/popup-blocked'
+            ? 'הדפדפן חסם את חלון הכניסה. אפשר חלונות קופצים לאתר הזה ונסה שוב'
+            : 'הכניסה נכשלה, נסה שוב';
+    }
+});
+
+// ---------- כניסה וסנכרון ----------
+
+// מצב הסנכרון בכותרת: ירוק = הכול בענן, כתום = שומר / אין חיבור
+let lastSync = { fromCache: true, pending: false };
+
+function updateSyncStatus() {
+    let state = 'ok';
+    let text = 'מסונכרן';
+    if (!navigator.onLine) {
+        state = 'offline';
+        text = 'אין חיבור – יסתנכרן כשהחיבור יחזור';
+    } else if (lastSync.pending) {
+        state = 'pending';
+        text = 'שומר...';
+    } else if (lastSync.fromCache) {
+        state = 'pending';
+        text = 'מתחבר...';
+    }
+    userBox.dataset.sync = state;
+    syncText.textContent = text;
+}
+
+window.addEventListener('online', updateSyncStatus);
+window.addEventListener('offline', updateSyncStatus);
+
+// מצבי המסך: טעינה / מסך כניסה / האתר עצמו
+function showScreen(screen) {
+    loadingState.hidden = screen !== 'loading';
+    authScreen.hidden = screen !== 'auth';
+    appContent.hidden = screen !== 'app';
+}
+
+cloud.startCloud({
+    onUser(user) {
+        tasks = [];
+        userBox.hidden = !user;
+        if (!user) {
+            signInBtn.textContent = 'התחבר עם Google';
+            showScreen('auth');
+            return;
+        }
+        userName.textContent = user.displayName || user.email;
+        showScreen('loading');
+    },
+    onTasks(cloudTasks, sync) {
+        const firstLoad = appContent.hidden;
+        tasks = cloudTasks.map((t) => ({ ...normalizeTask(t), pending: t.pending }));
+        lastSync = sync;
+        updateSyncStatus();
+        showScreen('app');
+        render();
+        if (firstLoad) migrateLocalTasks();
+    },
+    onError(error) {
+        console.error(error);
+        if (error.code === 'permission-denied') {
+            authMessage.textContent = 'לחשבון הזה אין גישה ללוח המשותף. התחבר עם החשבון המורשה.';
+            signInBtn.textContent = 'התחבר עם חשבון אחר';
+        } else {
+            authMessage.textContent = 'לא הצלחנו לטעון את המשימות. בדוק את החיבור לאינטרנט ורענן את הדף.';
+        }
+        showScreen('auth');
+    }
 });
 
 // ---------- התחלה ----------
@@ -759,4 +882,3 @@ document.getElementById('today').textContent = new Date().toLocaleDateString('he
 });
 
 fillCategoryOptions();
-render();

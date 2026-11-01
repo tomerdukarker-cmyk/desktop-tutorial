@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self'; img-src 'self'; connect-src https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://desktop-tutorial-c8c95.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'">
     <title>רשימת משימות חכמה</title>
     <!-- מספר הגרסה (?v=) מכריח את הדפדפן לטעון קבצים חדשים. להעלות אותו בכל עדכון -->
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
     <main class="app">
@@ -15,11 +15,31 @@
                 <h1>המשימות שלי</h1>
                 <p id="today" class="subtitle"></p>
             </div>
-            <div class="urgent-badge" id="urgentBadge" hidden>
-                <span id="urgentCount">0</span> דחופות
+            <div class="header-side">
+                <div class="urgent-badge" id="urgentBadge" hidden>
+                    <span id="urgentCount">0</span> דחופות
+                </div>
+                <div class="user-box" id="userBox" hidden>
+                    <span class="sync-dot" aria-hidden="true"></span>
+                    <span id="syncText" class="sync-text"></span>
+                    <span class="user-sep" aria-hidden="true">·</span>
+                    <span id="userName" class="user-name"></span>
+                    <button type="button" id="signOutBtn" class="sign-out-btn">התנתק</button>
+                </div>
             </div>
         </header>
 
+        <p id="loadingState" class="loading-state">טוען...</p>
+
+        <section id="authScreen" class="auth-screen" hidden>
+            <div class="auth-icon">☁️</div>
+            <h2>הלוח המשותף שלנו</h2>
+            <p>התחבר עם חשבון Google כדי לראות ולערוך את המשימות. כל שינוי מסתנכרן מיד בין כל המכשירים.</p>
+            <button type="button" id="signInBtn" class="add-btn sign-in-btn">התחבר עם Google</button>
+            <p id="authMessage" class="auth-message" role="alert"></p>
+        </section>
+
+        <div id="appContent" hidden>
         <section class="progress-section">
             <div class="progress-labels">
                 <span id="progressText">אין משימות עדיין</span>
@@ -134,8 +154,10 @@
             <span id="taskCounter"></span>
             <button type="button" id="clearDoneBtn" class="clear-btn" hidden>נקה משימות שהושלמו</button>
         </footer>
+        </div>
     </main>
-    <script src="holidays.js?v=2"></script>
-    <script src="script.js?v=2"></script>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script src="holidays.js?v=3"></script>
+    <script type="module" src="script.js?v=4"></script>
 </body>
 </html>
