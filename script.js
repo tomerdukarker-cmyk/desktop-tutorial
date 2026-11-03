@@ -1,9 +1,10 @@
-import * as cloud from './cloud.js?v=4';
+import * as cloud from './cloud.js?v=5';
 
 const taskForm = document.getElementById('taskForm');
 const taskInput = document.getElementById('taskInput');
 const categoryInput = document.getElementById('categoryInput');
 const dateInput = document.getElementById('dateInput');
+const endDateInput = document.getElementById('endDateInput');
 const timeInput = document.getElementById('timeInput');
 const taskList = document.getElementById('taskList');
 const emptyState = document.getElementById('emptyState');
@@ -99,34 +100,58 @@ function nowTimeKey() {
     return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
+function formatDay(key) {
+    const diff = Math.round((fromDateKey(key) - fromDateKey(toDateKey(new Date()))) / DAY_MS);
+    if (diff === 0) return 'היום';
+    if (diff === 1) return 'מחר';
+    if (diff === -1) return 'אתמול';
+    return fromDateKey(key).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+}
+
 function formatDue(task) {
-    const diff = Math.round((fromDateKey(task.dueDate) - fromDateKey(toDateKey(new Date()))) / DAY_MS);
-    let text;
-    if (diff === 0) text = 'היום';
-    else if (diff === 1) text = 'מחר';
-    else if (diff === -1) text = 'אתמול';
-    else text = fromDateKey(task.dueDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+    const text = task.endDate ? `${formatDay(task.dueDate)} – ${formatDay(task.endDate)}` : formatDay(task.dueDate);
     return task.dueTime ? `${text}, ${task.dueTime}` : text;
+}
+
+// היום האחרון של המשימה: סוף הטווח, או התאריך היחיד
+function lastDay(task) {
+    return task.endDate || task.dueDate;
+}
+
+// האם המשימה נמשכת (גם) בטווח הימים from..to
+function overlapsDays(task, from, to) {
+    return Boolean(task.dueDate) && task.dueDate <= to && lastDay(task) >= from;
 }
 
 function isOverdue(task) {
     if (task.done || !task.dueDate) return false;
     const today = toDateKey(new Date());
-    if (task.dueDate < today) return true;
-    return task.dueDate === today && Boolean(task.dueTime) && task.dueTime < nowTimeKey();
+    const end = lastDay(task);
+    if (end < today) return true;
+    return end === today && Boolean(task.dueTime) && task.dueTime < nowTimeKey();
+}
+
+// משימה בטווח שהתחיל וטרם הסתיים
+function isInProgress(task) {
+    const today = toDateKey(new Date());
+    return Boolean(task.endDate) && !task.done && task.dueDate <= today && today <= task.endDate;
 }
 
 // ---------- שמירה וטעינה ----------
 
 // משימה תקינה עם ערכי ברירת מחדל לשדות חסרים
 function normalizeTask(task) {
+    const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const dueDate = isDate(task.dueDate) ? task.dueDate : '';
     return {
         id: String(task.id || createId()),
         text: String(task.text ?? '').slice(0, 200),
         done: Boolean(task.done),
         priority: PRIORITIES[task.priority] ? task.priority : 'medium',
         category: CATEGORIES[task.category] ? task.category : 'other',
-        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) ? task.dueDate : '',
+        dueDate,
+        // סוף טווח: רק אם יש התחלה והוא אחריה
+        endDate: dueDate && isDate(task.endDate) && task.endDate > dueDate ? task.endDate : '',
         dueTime: /^\d{2}:\d{2}$/.test(task.dueTime) ? task.dueTime : '',
         createdAt: Number(task.createdAt) || Date.now(),
         updatedAt: Number(task.updatedAt) || Number(task.createdAt) || Date.now()
@@ -244,6 +269,7 @@ function createTaskElement(task) {
     if (task.dueDate) {
         const overdue = isOverdue(task);
         meta.append(createTag(`${overdue ? '⚠️' : '📅'} ${formatDue(task)}`, overdue ? 'tag-overdue' : 'tag-date'));
+        if (isInProgress(task)) meta.append(createTag('▶️ בביצוע', 'tag-progress'));
     }
     if (task.pending) {
         meta.append(createTag('⏳ עוד לא נשמר בענן', 'tag-pending'));
@@ -317,10 +343,17 @@ function renderCalendar() {
 
     monthTitle.textContent = calendarMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
 
-    // קיבוץ המשימות לפי תאריך
+    // קיבוץ המשימות לפי תאריך. משימה עם טווח מופיעה בכל יום בטווח שנמצא בחודש הזה
+    const monthStart = toDateKey(new Date(year, month, 1));
+    const monthEnd = toDateKey(new Date(year, month, daysInMonth));
     const byDate = {};
     sortTasks(tasks).forEach((t) => {
-        if (t.dueDate) (byDate[t.dueDate] ||= []).push(t);
+        if (!overlapsDays(t, monthStart, monthEnd)) return;
+        const from = t.dueDate > monthStart ? t.dueDate : monthStart;
+        const to = lastDay(t) < monthEnd ? lastDay(t) : monthEnd;
+        for (let d = fromDateKey(from); toDateKey(d) <= to; d.setDate(d.getDate() + 1)) {
+            (byDate[toDateKey(d)] ||= []).push(t);
+        }
     });
 
     const cells = [];
@@ -390,7 +423,7 @@ function renderCalendar() {
     calendarGrid.replaceChildren(...cells);
 
     // המשימות של היום שנבחר
-    const selectedTasks = byDate[selectedDay] || [];
+    const selectedTasks = sortTasks(tasks.filter((t) => overlapsDays(t, selectedDay, selectedDay)));
     dayTitle.textContent = `משימות ל${fromDateKey(selectedDay).toLocaleDateString('he-IL', {
         weekday: 'long',
         day: 'numeric',
@@ -407,6 +440,7 @@ function renderCalendar() {
 function selectDay(key) {
     selectedDay = key;
     dateInput.value = key;
+    endDateInput.min = key;
     renderCalendar();
 }
 
@@ -631,7 +665,7 @@ function renderMonthTable() {
             (holidaysByDate[key] || []).forEach((h) => shortHolidayName(h.name).forEach((n) => holidayNames.add(n)));
         }
 
-        const s = summarize(tasks.filter((t) => t.dueDate.startsWith(monthKey)));
+        const s = summarize(tasks.filter((t) => overlapsDays(t, `${monthKey}-01`, `${monthKey}-${pad(daysInMonth)}`)));
         const holidaysText = document.createElement('span');
         holidaysText.className = 'holiday-list';
         holidaysText.textContent = holidayNames.size ? [...holidayNames].join(', ') : '–';
@@ -729,8 +763,17 @@ taskForm.addEventListener('submit', (e) => {
     if (!text) return;
 
     const dueTime = timeInput.value;
-    // שעה בלי תאריך = היום
-    const dueDate = dateInput.value || (dueTime ? toDateKey(new Date()) : '');
+    const today = toDateKey(new Date());
+    let endDate = endDateInput.value;
+    // בלי תאריך התחלה: מתחילים היום (או ביום הסיום, אם הוא כבר עבר). שעה בלי תאריך = היום
+    let dueDate = dateInput.value || (endDate ? (endDate < today ? endDate : today) : (dueTime ? today : ''));
+
+    if (endDate && endDate < dueDate) {
+        showToast('תאריך הסיום לפני תאריך ההתחלה');
+        endDateInput.focus();
+        return;
+    }
+    if (endDate === dueDate) endDate = '';
 
     const now = Date.now();
     cloud.saveTask({
@@ -740,6 +783,7 @@ taskForm.addEventListener('submit', (e) => {
         priority: taskForm.querySelector('input[name="priority"]:checked').value,
         category: categoryInput.value,
         dueDate,
+        endDate,
         dueTime,
         createdAt: now,
         updatedAt: now
@@ -754,8 +798,16 @@ taskForm.addEventListener('submit', (e) => {
 
     taskInput.value = '';
     timeInput.value = '';
+    endDateInput.value = '';
     if (currentView !== 'calendar') dateInput.value = '';
+    endDateInput.min = dateInput.value;
     taskInput.focus();
+});
+
+// אי אפשר לבחור סיום לפני ההתחלה
+dateInput.addEventListener('change', () => {
+    endDateInput.min = dateInput.value;
+    if (endDateInput.value && endDateInput.value < dateInput.value) endDateInput.value = '';
 });
 
 tabButtons.forEach((tab) => {

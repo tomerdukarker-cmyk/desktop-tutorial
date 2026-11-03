@@ -505,9 +505,14 @@ button {
 /* קטגוריה, תאריך ושעה בטופס */
 .meta-row {
     display: grid;
-    grid-template-columns: 1.2fr 1.4fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin-top: 12px;
+}
+
+.field small {
+    font-size: 11px;
+    opacity: 0.8;
 }
 
 .field {
@@ -1024,6 +1029,12 @@ button {
     50% { opacity: 0.3; }
 }
 
+.tag-progress {
+    color: var(--vacation);
+    background: var(--vacation-soft);
+    font-weight: 600;
+}
+
 .tag-pending {
     color: var(--medium);
     background: var(--medium-soft);
@@ -1138,14 +1149,6 @@ button {
 
     .delete-btn {
         opacity: 1;
-    }
-
-    .meta-row {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .meta-row .field:first-child {
-        grid-column: 1 / -1;
     }
 
     .stat-tiles {

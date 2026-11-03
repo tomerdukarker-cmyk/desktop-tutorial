@@ -18,12 +18,15 @@ service cloud.firestore {
 
     // משימה חייבת להיות במבנה שהאתר יוצר - שום שדה אחר לא נכנס
     function isValidTask(data) {
-      return data.keys().hasOnly(['text', 'done', 'priority', 'category', 'dueDate', 'dueTime', 'createdAt', 'updatedAt'])
+      return data.keys().hasOnly(['text', 'done', 'priority', 'category', 'dueDate', 'endDate', 'dueTime', 'createdAt', 'updatedAt'])
         && data.text is string && data.text.size() > 0 && data.text.size() <= 200
         && data.done is bool
         && data.priority in ['high', 'medium', 'low']
         && data.category in ['work', 'personal', 'home', 'study', 'health', 'other']
         && data.dueDate is string && (data.dueDate == '' || data.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        // סוף טווח (לא חובה - משימות ישנות בלי השדה עדיין תקינות): ריק, או תאריך אחרי ההתחלה
+        && (!('endDate' in data) || (data.endDate is string && (data.endDate == ''
+            || (data.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && data.dueDate != '' && data.endDate > data.dueDate))))
         && data.dueTime is string && (data.dueTime == '' || data.dueTime.matches('^[0-9]{2}:[0-9]{2}$'))
         && data.createdAt is number
         && data.updatedAt is number;

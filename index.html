@@ -6,7 +6,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self'; img-src 'self'; connect-src https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://desktop-tutorial-c8c95.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'">
     <title>רשימת משימות חכמה</title>
     <!-- מספר הגרסה (?v=) מכריח את הדפדפן לטעון קבצים חדשים. להעלות אותו בכל עדכון -->
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
     <main class="app">
@@ -74,8 +74,12 @@
                     <select id="categoryInput"></select>
                 </label>
                 <label class="field">
-                    <span>תאריך</span>
+                    <span>מתאריך</span>
                     <input type="date" id="dateInput">
+                </label>
+                <label class="field">
+                    <span>עד תאריך <small>(לא חובה)</small></span>
+                    <input type="date" id="endDateInput">
                 </label>
                 <label class="field">
                     <span>שעה</span>
@@ -158,6 +162,6 @@
     </main>
     <div id="toast" class="toast" role="status" hidden></div>
     <script src="holidays.js?v=3"></script>
-    <script type="module" src="script.js?v=4"></script>
+    <script type="module" src="script.js?v=5"></script>
 </body>
 </html>
