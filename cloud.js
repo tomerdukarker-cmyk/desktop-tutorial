@@ -79,7 +79,9 @@ export function signOut() {
 }
 
 // הפונקציות למטה לא מחכות לשרת: Firestore מעדכן את המסך מיד ומסנכרן ברקע
+// סוף טווח ריק לא נשמר בכלל, כך שמשימה בלי טווח עוברת גם כללי אבטחה שלא מכירים את השדה
 function stripId({ id, ...data }) {
+    if (!data.endDate) delete data.endDate;
     return data;
 }
 

@@ -1,4 +1,4 @@
-import * as cloud from './cloud.js?v=5';
+import * as cloud from './cloud.js?v=6';
 
 const taskForm = document.getElementById('taskForm');
 const taskInput = document.getElementById('taskInput');
